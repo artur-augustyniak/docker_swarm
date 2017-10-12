@@ -1,0 +1,58 @@
+#Required for IPv6 capable hosts
+::1 ip6-localhost ip6-loopback
+fe00::0 ip6-localnet
+ff00::0 ip6-mcastprefix
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+ff02::3 ip6-allhosts
+
+1.2.3.4    l05-swarm-manager
+1.2.3.5    l06-swarm-node-0
+1.2.3.6    l07-swarm-node-1
+1.2.3.7    l08-swarm-node-2
+
+172.20.200.9    l09-dsink-storage-0
+172.20.200.10   l10-dsink-storage-1
+
+l09-dsink-storage-0:test_replicated_volume      /media/gluster glusterfs defaults 0 0
+
+apt-get install glusterfs-client
+
+export no_proxy=l05-swarm-manager,1.2.3.4,\
+l06-swarm-node-0,1.2.3.5,\
+l07-swarm-node-1,1.2.3.6,\
+l08-swarm-node-2,1.2.3.7
+
+[Unit]
+Description=Docker Application Container Engine
+Documentation=https://docs.docker.com
+After=network.target docker.socket
+Requires=docker.socket
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/docker daemon -H tcp://0.0.0.0:2375 -H unix:///var/run/docker.sock --insecure-registry l05-swarm-manager:5000 --cluster-store=consul://1.2.3.4:8500 --cluster-advertise=eth1:2375
+ExecStart=/usr/bin/docker daemon -H tcp://0.0.0.0:2375 -H unix:///var/run/docker.sock --insecure-registry l05-swarm-manager:5000
+MountFlags=slave
+LimitNOFILE=1048576
+LimitNPROC=1048576
+LimitCORE=infinity
+
+[Install]
+WantedBy=multi-user.target
+
+systemctl daemon-reload
+systemctl start docker.service
+
+docker run -d -p 4000:4000 swarm manage -H :4000 --advertise 1.2.3.4:4000  consul://1.2.3.4:8500
+docker run -d -p 4000:4000 swarm manage -H :4000 --advertise 1.2.3.4:4000  consul://1.2.3.4
+docker run -d -p 4000:4000 --name swarm  --restart=always swarm manage -H :4000 --advertise 1.2.3.4:4000  consul://1.2.3.4
+
+
+docker run -d --name l06-swarm-node-0 --restart=always swarm join --advertise=1.2.3.5:2375 consul://1.2.3.4:8500
+docker run -d --name l07-swarm-node-1 --restart=always swarm join --advertise=1.2.3.6:2375 consul://1.2.3.4:8500
+docker run -d --name l08-swarm-node-2 --restart=always swarm join --advertise=1.2.3.7:2375 consul://1.2.3.4:8500
+
+
+
+
